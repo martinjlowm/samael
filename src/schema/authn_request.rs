@@ -199,20 +199,23 @@ impl AuthnRequest {
     }
 
     #[cfg(feature = "xmlsec")]
-    pub fn to_signed_xml(&self,
+    pub fn to_signed_xml(
+        &self,
         private_key_der: &[u8],
     ) -> Result<String, Box<dyn std::error::Error>> {
         crypto::sign_xml(self.to_xml()?, private_key_der)
-            .map_err(|crypto_error|
-                Box::new(crypto_error) as Box<dyn std::error::Error>
-            )
+            .map_err(|crypto_error| Box::new(crypto_error) as Box<dyn std::error::Error>)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::collections::HashMap;
+
+    use rsa::{pkcs8::FromPublicKey, Hash, PaddingScheme, PublicKey, RsaPublicKey};
+    use sha2::{Digest, Sha256};
+
+    use super::*;
 
     #[test]
     #[cfg(feature = "xmlsec")]
@@ -232,19 +235,17 @@ mod test {
             "/test_vectors/authn_request_sign_template.xml"
         ));
 
-        let signed_authn_request =
-            authn_request_sign_template
-                .parse::<AuthnRequest>()?
-                .add_key_info(public_cert)
-                .to_signed_xml(private_key)?;
+        let signed_authn_request = authn_request_sign_template
+            .parse::<AuthnRequest>()?
+            .add_key_info(public_cert)
+            .to_signed_xml(private_key)?;
 
-        assert!(
-            crate::crypto::verify_signed_xml(
-                &signed_authn_request,
-                &public_cert[..],
-                Some("ID"),
-            ).is_ok()
-        );
+        assert!(crate::crypto::verify_signed_xml(
+            &signed_authn_request,
+            &public_cert[..],
+            Some("ID"),
+        )
+        .is_ok());
 
         Ok(())
     }
@@ -260,42 +261,39 @@ mod test {
         // Remove Signature, then verify percent encoded query string using
         // openssl bindings.
 
-        let query_params =
-            signed_authn_redirect_url
-                .query_pairs()
-                .into_owned()
-                .collect::<HashMap<String, String>>();
+        let query_params = signed_authn_redirect_url
+            .query_pairs()
+            .into_owned()
+            .collect::<HashMap<String, String>>();
         let signature: &String = &query_params["Signature"];
 
         let mut verify_url = url::Url::parse(
-            format!("{}://{}",
+            format!(
+                "{}://{}",
                 signed_authn_redirect_url.scheme(),
                 signed_authn_redirect_url.host_str().unwrap(),
-            ).as_str(),
+            )
+            .as_str(),
         )?;
 
         for key in vec!["SAMLRequest", "RelayState", "SigAlg"] {
             if query_params.contains_key(key) {
-                verify_url.query_pairs_mut().append_pair(
-                    key,
-                    &query_params[key],
-                );
+                verify_url
+                    .query_pairs_mut()
+                    .append_pair(key, &query_params[key]);
             }
         }
 
         let signed_string: String = verify_url.query().unwrap().to_string();
+        let public = RsaPublicKey::from_public_key_pem(std::str::from_utf8(public_key_pem)?)?;
 
-        let public = openssl::rsa::Rsa::public_key_from_pem(public_key_pem)?;
-        let keypair = openssl::pkey::PKey::from_rsa(public)?;
-
-        let mut verifier = openssl::sign::Verifier::new(
-            openssl::hash::MessageDigest::sha256(),
-            &keypair,
-        ).unwrap();
-        verifier.update(&signed_string.as_bytes()).unwrap();
-
+        let hashed = Sha256::digest(signed_string.as_bytes());
         let signature_bytes = base64::decode(signature)?;
-        Ok(verifier.verify(&signature_bytes).unwrap())
+        let padding = PaddingScheme::new_pkcs1v15_sign(Some(Hash::SHA2_256));
+
+        public.verify(padding, &hashed[..], signature_bytes.as_slice())?;
+
+        Ok(true)
     }
 
     #[test]
@@ -315,18 +313,15 @@ mod test {
             "/test_vectors/authn_request_sign_template.xml"
         ));
 
-        let signed_authn_redirect_url =
-            authn_request_sign_template
-                .parse::<AuthnRequest>()?
-                .signed_redirect(&"", private_key)?
-                .unwrap();
+        let signed_authn_redirect_url = authn_request_sign_template
+            .parse::<AuthnRequest>()?
+            .signed_redirect(&"", private_key)?
+            .unwrap();
 
-        assert!(
-            verify_signed_redirect_url(
-                &signed_authn_redirect_url,
-                &public_key[..],
-            )?
-        );
+        assert!(verify_signed_redirect_url(
+            &signed_authn_redirect_url,
+            &public_key[..],
+        )?);
 
         Ok(())
     }
@@ -348,18 +343,15 @@ mod test {
             "/test_vectors/authn_request_sign_template.xml"
         ));
 
-        let signed_authn_redirect_url =
-            authn_request_sign_template
-                .parse::<AuthnRequest>()?
-                .signed_redirect(&"some_relay_state_here", private_key)?
-                .unwrap();
+        let signed_authn_redirect_url = authn_request_sign_template
+            .parse::<AuthnRequest>()?
+            .signed_redirect(&"some_relay_state_here", private_key)?
+            .unwrap();
 
-        assert!(
-            verify_signed_redirect_url(
-                &signed_authn_redirect_url,
-                &public_key[..],
-            )?
-        );
+        assert!(verify_signed_redirect_url(
+            &signed_authn_redirect_url,
+            &public_key[..],
+        )?);
 
         Ok(())
     }
