@@ -2,12 +2,15 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Writer;
 use serde::Deserialize;
 use std::io::Cursor;
+use crate::metadata::NameIdFormat;
 
 const NAME: &str = "saml2:NameID";
 const SCHEMA: (&str, &str) = ("xmlns:saml2", "urn:oasis:names:tc:SAML:2.0:assertion");
 
 #[derive(Clone, Debug, Deserialize, Default, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct NameId {
+    #[serde(rename = "Format")]
+    pub format: Option<NameIdFormat>,
     #[serde(rename = "$value")]
     pub value: Option<String>,
 }
@@ -18,6 +21,10 @@ impl NameId {
         let mut writer = Writer::new(Cursor::new(&mut write_buf));
         let mut root = BytesStart::borrowed(NAME.as_bytes(), NAME.len());
         root.push_attribute(SCHEMA);
+
+        if let Some(format) = &self.format {
+            root.push_attribute(("Format", format.value()));
+        }
 
         writer.write_event(Event::Start(root))?;
 
