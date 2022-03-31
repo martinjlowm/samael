@@ -39,6 +39,68 @@ pub struct LogoutRequest {
     pub session_index: Option<String>,
 }
 
+impl LogoutRequest {
+    fn name() -> &'static str {
+        "saml2:LogoutRequest"
+    }
+
+    fn schema() -> &'static [(&'static str, &'static str)] {
+        &[
+            ("xmlns:saml2", "urn:oasis:names:tc:SAML:2.0:assertion"),
+            ("xmlns:xsd", "http://www.w3.org/2001/XMLSchema"),
+        ]
+    }
+
+    pub fn to_xml(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut write_buf = Vec::new();
+        let mut writer = Writer::new(Cursor::new(&mut write_buf));
+        let mut root = BytesStart::borrowed(Self::name().as_bytes(), Self::name().len());
+
+        for attr in Self::schema() {
+            root.push_attribute((attr.0, attr.1));
+        }
+
+        if let Some(id) = &self.id {
+            root.push_attribute(("ID", id.as_ref()));
+        }
+
+        if let Some(version) = &self.version {
+            root.push_attribute(("Version", version.as_ref()));
+        }
+
+        if let Some(issue_instant) = &self.issue_instant {
+            root.push_attribute((
+                "IssueInstant",
+                issue_instant
+                    .to_rfc3339_opts(SecondsFormat::Millis, true)
+                    .as_ref(),
+            ));
+        }
+
+        writer.write_event(Event::Start(root))?;
+
+        if let Some(destination) = &self.destination {
+            writer.write(destination.as_ref())?;
+        }
+
+        if let Some(issuer) = &self.issuer {
+            writer.write(issuer.to_xml()?.as_bytes())?;
+        }
+
+        if let Some(signature) = &self.signature {
+            writer.write(signature.to_xml()?.as_bytes())?;
+        }
+
+        if let Some(session_index) = &self.session_index {
+            writer.write(session_index.as_ref())?;
+        }
+
+        //TODO: attributeStatement
+        writer.write_event(Event::End(BytesEnd::borrowed(Self::name().as_bytes())))?;
+        Ok(String::from_utf8(write_buf)?)
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Assertion {
     #[serde(rename = "ID")]
