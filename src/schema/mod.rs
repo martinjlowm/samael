@@ -1,6 +1,7 @@
 pub mod authn_request;
 mod conditions;
 mod issuer;
+mod name_id;
 mod name_id_policy;
 mod response;
 mod subject;
@@ -8,6 +9,7 @@ mod subject;
 pub use authn_request::AuthnRequest;
 pub use conditions::*;
 pub use issuer::Issuer;
+pub use name_id::NameId;
 pub use name_id_policy::NameIdPolicy;
 pub use response::Response;
 pub use subject::*;
@@ -37,6 +39,8 @@ pub struct LogoutRequest {
     pub signature: Option<Signature>,
     #[serde(rename = "SessionIndex")]
     pub session_index: Option<String>,
+    #[serde(rename = "NameID")]
+    pub name_id: Option<NameId>,
 }
 
 impl LogoutRequest {
@@ -46,7 +50,7 @@ impl LogoutRequest {
 
     fn schema() -> &'static [(&'static str, &'static str)] {
         &[
-            ("xmlns:saml2", "urn:oasis:names:tc:SAML:2.0:assertion"),
+            ("xmlns:saml2", "urn:oasis:names:tc:SAML:2.0:protocol"),
             ("xmlns:xsd", "http://www.w3.org/2001/XMLSchema"),
         ]
     }
@@ -93,6 +97,10 @@ impl LogoutRequest {
 
         if let Some(session_index) = &self.session_index {
             writer.write(session_index.as_ref())?;
+        }
+
+        if let Some(name_id) = &self.name_id {
+            writer.write(name_id.to_xml()?.as_bytes())?;
         }
 
         //TODO: attributeStatement
