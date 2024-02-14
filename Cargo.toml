@@ -29,7 +29,7 @@ libc        = {version = "^0.2.66", optional = true}
 libxml = { version = "0.3.0", optional = true}
 quick-xml = { version = "0.22.0", features = [ "serialize" ] }
 rand = "0.8.4"
-rsa = "0.5.0"
+rsa = "0.9.6"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.9"
 snafu = "0.6"
