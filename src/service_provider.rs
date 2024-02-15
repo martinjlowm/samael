@@ -8,9 +8,9 @@ use crate::{
 use chrono::prelude::*;
 use chrono::Duration;
 use flate2::{write::DeflateEncoder, Compression};
-use rsa::pkcs1::FromRsaPrivateKey;
+use rsa::pkcs1::DecodeRsaPrivateKey;
 use sha2::{Digest, Sha256};
-use rsa::{RsaPrivateKey,PaddingScheme,Hash};
+use rsa::{RsaPrivateKey, Pkcs1v15Sign};
 use snafu::Snafu;
 use x509_parser::parse_x509_certificate;
 use std::fmt::Debug;
@@ -615,9 +615,9 @@ impl AuthnRequest {
 
         // Use openssl's bindings to sign
         let pkey = RsaPrivateKey::from_pkcs1_der(&private_key_der)?;
-        let padding = PaddingScheme::new_pkcs1v15_sign(Some(Hash::SHA2_256));
+
         let hashed = Sha256::digest(string_to_sign.as_bytes());
-        let signature = pkey.sign(padding, &hashed[..])?;
+        let signature = pkey.sign(Pkcs1v15Sign::new::<Sha256>(), &hashed[..])?;
 
         unsigned_url
             .query_pairs_mut()
